@@ -468,7 +468,7 @@ function getDecoratedBee(): string {
 }
 
 // ============================================================================
-// Model Configuration
+// Model Configuration - Fetched from models.dev (same as OpenCode)
 // ============================================================================
 
 interface ModelOption {
@@ -477,121 +477,189 @@ interface ModelOption {
   hint: string;
 }
 
-const COORDINATOR_MODELS: ModelOption[] = [
-  {
-    value: "anthropic/claude-sonnet-4-5",
-    label: "Claude Sonnet 4.5",
-    hint: "Best balance of speed and capability (recommended)",
-  },
-  {
-    value: "anthropic/claude-opus-4-5",
-    label: "Claude Opus 4.5",
-    hint: "Most capable, slower and more expensive",
-  },
-  {
-    value: "openai/gpt-4o",
-    label: "GPT-4o",
-    hint: "Fast, good for most tasks",
-  },
-  {
-    value: "google/gemini-2.0-flash",
-    label: "Gemini 2.0 Flash",
-    hint: "Fast and capable",
-  },
-  {
-    value: "google/gemini-1.5-pro",
-    label: "Gemini 1.5 Pro",
-    hint: "More capable, larger context",
-  },
-  // MiniMax models
-  {
-    value: "minimax/MiniMax-M2.1",
-    label: "MiniMax M2.1",
-    hint: "Fast, large context (up to 1M tokens)",
-  },
-  // Z.AI models
-  {
-    value: "z-ai/zy-1",
-    label: "Z.AI Zy-1",
-    hint: "Z.AI coding model",
-  },
-  {
-    value: "z-ai/zy-1-32k",
-    label: "Z.AI Zy-1-32k",
-    hint: "Z.AI with larger context",
-  },
-  // xAI (Grok)
-  {
-    value: "xai/grok-2-1212",
-    label: "Grok 2",
-    hint: "xAI's coding model",
-  },
-  // DeepSeek
-  {
-    value: "deepseek/deepseek-chat",
-    label: "DeepSeek Chat",
-    hint: "Strong coding capabilities",
-  },
-  // Custom option
-  {
-    value: "custom",
-    label: "Custom model...",
-    hint: "Enter your own provider/model",
-  },
-];
+interface ModelsDevProvider {
+  id: string;
+  name: string;
+  models: Record<string, { name: string; status?: string }>;
+}
 
-const WORKER_MODELS: ModelOption[] = [
-  {
-    value: "anthropic/claude-haiku-4-5",
-    label: "Claude Haiku 4.5",
-    hint: "Fast and cost-effective (recommended)",
-  },
-  {
-    value: "anthropic/claude-sonnet-4-5",
-    label: "Claude Sonnet 4.5",
-    hint: "More capable, slower",
-  },
-  {
-    value: "openai/gpt-4o-mini",
-    label: "GPT-4o Mini",
-    hint: "Fast and cheap",
-  },
-  {
-    value: "google/gemini-2.0-flash",
-    label: "Gemini 2.0 Flash",
-    hint: "Fast and capable",
-  },
-  // MiniMax models (fast and cost-effective)
-  {
-    value: "minimax/MiniMax-Text-01",
-    label: "MiniMax Text 01",
-    hint: "Fast, cost-effective",
-  },
-  // Z.AI models
-  {
-    value: "z-ai/zy-1-preview",
-    label: "Z.AI Zy-1 Preview",
-    hint: "Fast Z.AI model",
-  },
-  // Groq (ultra-fast inference)
-  {
-    value: "groq/llama-3.1-70b-versatile",
-    label: "Llama 3.1 70B (Groq)",
-    hint: "Ultra-fast inference",
-  },
-  // DeepSeek (good coding capabilities)
-  {
-    value: "deepseek/deepseek-coder",
-    label: "DeepSeek Coder",
-    hint: "Specialized for code",
-  },
-  // Custom option
-  {
-    value: "custom",
-    label: "Custom model...",
-    hint: "Enter your own provider/model",
-  },
-];
+// Read connected providers from OpenCode config
+async function getConnectedProviders(): Promise<Set<string>> {
+  const configPath = join(homedir(), ".config", "opencode", "opencode.json");
+  const providers = new Set<string>();
+
+  if (!existsSync(configPath)) return providers;
+
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    if (config.provider) {
+      for (const providerId of Object.keys(config.provider)) {
+        providers.add(providerId.toLowerCase());
+      }
+    }
+    // Also check for provider.model setting
+    if (config.model && typeof config.model === "string") {
+      const modelStr = config.model;
+      // Common provider prefixes
+      const knownProviders = [
+        "anthropic",
+        "openai",
+        "google",
+        "minimax",
+        "z-ai",
+        "xai",
+        "deepseek",
+        "groq",
+      ];
+      for (const p of knownProviders) {
+        if (modelStr.toLowerCase().startsWith(p)) {
+          providers.add(p);
+        }
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+
+  return providers;
+}
+
+// Fetch models from models.dev (same source as OpenCode)
+// Throws error if fetch fails - no fallback
+let cachedAllModels: ModelOption[] | null = null;
+
+async function fetchModelsFromModelsDev(): Promise<ModelOption[]> {
+  const connectedProviders = await getConnectedProviders();
+
+  if (cachedAllModels) {
+    // Filter to only connected providers
+    if (connectedProviders.size > 0) {
+      return cachedAllModels.filter((m) => {
+        const providerId = m.value.split("/")[0].toLowerCase();
+        return connectedProviders.has(providerId);
+      });
+    }
+    return cachedAllModels;
+  }
+
+  const response = await fetch("https://models.dev/api.json", {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`Failed to fetch models.dev: HTTP ${response.status}`);
+
+  const data = (await response.json()) as Record<string, ModelsDevProvider>;
+  const models: ModelOption[] = [];
+
+  for (const [providerId, provider] of Object.entries(data)) {
+    // Skip providers not connected in OpenCode (if any connected)
+    if (connectedProviders.size > 0 && !connectedProviders.has(providerId.toLowerCase())) {
+      continue;
+    }
+
+    for (const [modelId, model] of Object.entries(provider.models || {})) {
+      // Skip deprecated/alpha models
+      if (model.status === "deprecated" || model.status === "alpha") continue;
+
+      // Use friendly name or format modelId
+      const label = model.name || `${provider.name} ${modelId}`;
+
+      models.push({
+        value: `${providerId}/${modelId}`,
+        label: label,
+        hint: provider.name,
+      });
+    }
+  }
+
+  // Sort by provider name, then model name
+  models.sort((a, b) => {
+    const providerCompare = a.hint?.localeCompare(b.hint || "") || 0;
+    if (providerCompare !== 0) return providerCompare;
+    return a.label.localeCompare(b.label);
+  });
+
+  cachedAllModels = models;
+  return models;
+}
+
+// Prompt for model with search (like OpenCode)
+async function promptForModel(
+  role: "coordinator" | "worker" | "lite",
+  allModels: ModelOption[],
+): Promise<string> {
+  if (allModels.length === 0) {
+    throw new Error(
+      "No models found. Please connect a provider in OpenCode first (/connect), then run swarm setup.",
+    );
+  }
+
+  // Search/filter prompt first
+  const searchTerm = await p.text({
+    message: `Search ${role} model (leave empty to see all):`,
+    placeholder: `e.g., claude, gpt, mini`,
+  });
+
+  if (p.isCancel(searchTerm) || !searchTerm?.trim()) {
+    // Show all models
+    const options = allModels.map((m) => ({
+      value: m.value,
+      label: `${m.hint ? `${m.hint}: ` : ""}${m.label}`,
+      hint: m.hint,
+    }));
+    return await promptSelectModel(`${role} model`, options);
+  }
+
+  // Filter models by search term
+  const term = searchTerm.toLowerCase().trim();
+  const filtered = allModels.filter(
+    (m) =>
+      m.label.toLowerCase().includes(term) ||
+      m.value.toLowerCase().includes(term) ||
+      m.hint?.toLowerCase().includes(term),
+  );
+
+  if (filtered.length === 0) {
+    throw new Error(`No models found matching "${searchTerm}"`);
+  }
+
+  const options = filtered.map((m) => ({
+    value: m.value,
+    label: `${m.hint ? `${m.hint}: ` : ""}${m.label}`,
+    hint: m.hint,
+  }));
+
+  return await promptSelectModel(`${role} model (filtered)`, options);
+}
+
+async function promptSelectModel(
+  title: string,
+  options: Array<{ value: string; label: string; hint?: string }>,
+): Promise<string> {
+  const selected = await p.select({
+    message: `Select ${title}:`,
+    options: options as ModelOption[],
+  });
+
+  if (p.isCancel(selected)) {
+    p.cancel("Setup cancelled");
+    process.exit(0);
+  }
+
+  return selected;
+}
+
+// Dynamic model lists (populated at runtime)
+let COORDINATOR_MODELS: ModelOption[] = [];
+let WORKER_MODELS: ModelOption[] = [];
+let LITE_MODELS: ModelOption[] = [];
+
+// Initialize models - throws if models.dev fetch fails
+async function initModels() {
+  const devModels = await fetchModelsFromModelsDev();
+  COORDINATOR_MODELS = devModels;
+  WORKER_MODELS = devModels;
+  LITE_MODELS = devModels;
+}
 
 // ============================================================================
 // Update Checking
@@ -2157,6 +2225,11 @@ async function setup(forceReinstall = false, nonInteractive = false) {
 
   p.intro("opencode-swarm-plugin v" + VERSION);
 
+  // Fetch models from models.dev (same source as OpenCode)
+  p.log.step("Fetching available models from models.dev...");
+  await initModels();
+  p.log.success(`Loaded ${COORDINATOR_MODELS.length} models`);
+
   // CRITICAL: Check for Bun first - the CLI requires Bun runtime
   const bunCheck = await checkCommand("bun", ["--version"]);
   if (!bunCheck.available) {
@@ -2245,6 +2318,9 @@ async function setup(forceReinstall = false, nonInteractive = false) {
     p.log.success("Swarm is already configured!");
     p.log.message(dim("  Found " + existingFiles.length + "/5 config files"));
 
+    // Fetch models from models.dev
+    await initModels();
+
     const action = await p.select({
       message: "What would you like to do?",
       options: [
@@ -2272,60 +2348,10 @@ async function setup(forceReinstall = false, nonInteractive = false) {
     }
 
     if (action === "models") {
-      // Quick model update flow
-      let selectedCoordinator = await p.select({
-        message: "Select coordinator model:",
-        options: COORDINATOR_MODELS,
-        initialValue: "anthropic/claude-sonnet-4-5",
-      });
-
-      if (p.isCancel(selectedCoordinator)) {
-        p.cancel("Setup cancelled");
-        process.exit(0);
-      }
-
-      // Handle custom coordinator model
-      let coordinatorModel: string;
-      if (selectedCoordinator === "custom") {
-        const customModel = await p.text({
-          message: "Enter coordinator model (provider/model format):",
-          placeholder: "e.g., minimax/MiniMax-M2.1",
-        });
-        if (p.isCancel(customModel) || !customModel) {
-          p.cancel("Setup cancelled");
-          process.exit(0);
-        }
-        coordinatorModel = customModel;
-      } else {
-        coordinatorModel = selectedCoordinator;
-      }
-
-      let selectedWorker = await p.select({
-        message: "Select worker model:",
-        options: WORKER_MODELS,
-        initialValue: "anthropic/claude-haiku-4-5",
-      });
-
-      if (p.isCancel(selectedWorker)) {
-        p.cancel("Setup cancelled");
-        process.exit(0);
-      }
-
-      // Handle custom worker model
-      let workerModel: string;
-      if (selectedWorker === "custom") {
-        const customModel = await p.text({
-          message: "Enter worker model (provider/model format):",
-          placeholder: "e.g., minimax/MiniMax-Text-01",
-        });
-        if (p.isCancel(customModel) || !customModel) {
-          p.cancel("Setup cancelled");
-          process.exit(0);
-        }
-        workerModel = customModel;
-      } else {
-        workerModel = selectedWorker;
-      }
+      // Quick model update flow with search (like OpenCode)
+      const coordinatorModel = await promptForModel("coordinator", COORDINATOR_MODELS);
+      const workerModel = await promptForModel("worker", WORKER_MODELS);
+      const liteModel = await promptForModel("lite", LITE_MODELS);
 
       // Update model lines in agent files (check both nested and legacy paths)
       const plannerPaths = [plannerAgentPath, legacyPlannerPath].filter(existsSync);
@@ -2642,120 +2668,10 @@ async function setup(forceReinstall = false, nonInteractive = false) {
     p.log.step("Configuring swarm agents...");
     p.log.message(dim("  Coordinator handles orchestration, worker executes tasks"));
 
-    const selectedCoordinator = await p.select({
-      message: "Select coordinator model (for orchestration/planning):",
-      options: COORDINATOR_MODELS,
-      initialValue: DEFAULT_COORDINATOR,
-    });
-
-    if (p.isCancel(selectedCoordinator)) {
-      p.cancel("Setup cancelled");
-      process.exit(0);
-    }
-    // Handle custom coordinator model
-    if (selectedCoordinator === "custom") {
-      const customModel = await p.text({
-        message: "Enter coordinator model (provider/model format):",
-        placeholder: "e.g., minimax/MiniMax-M2.1",
-      });
-      if (p.isCancel(customModel) || !customModel) {
-        p.cancel("Setup cancelled");
-        process.exit(0);
-      }
-      coordinatorModel = customModel;
-    } else {
-      coordinatorModel = selectedCoordinator;
-    }
-
-    const selectedWorker = await p.select({
-      message: "Select worker model (for task execution):",
-      options: WORKER_MODELS,
-      initialValue: DEFAULT_WORKER,
-    });
-
-    if (p.isCancel(selectedWorker)) {
-      p.cancel("Setup cancelled");
-      process.exit(0);
-    }
-    // Handle custom worker model
-    if (selectedWorker === "custom") {
-      const customModel = await p.text({
-        message: "Enter worker model (provider/model format):",
-        placeholder: "e.g., minimax/MiniMax-Text-01",
-      });
-      if (p.isCancel(customModel) || !customModel) {
-        p.cancel("Setup cancelled");
-        process.exit(0);
-      }
-      workerModel = customModel;
-    } else {
-      workerModel = selectedWorker;
-    }
-
-    // Lite model selection for simple tasks (docs, tests)
-    const selectedLite = await p.select({
-      message: "Select lite model (for docs, tests, simple edits):",
-      options: [
-        {
-          value: "anthropic/claude-haiku-4-5",
-          label: "Claude Haiku 4.5",
-          hint: "Fast and cost-effective (recommended)",
-        },
-        {
-          value: "anthropic/claude-sonnet-4-5",
-          label: "Claude Sonnet 4.5",
-          hint: "More capable, slower",
-        },
-        {
-          value: "openai/gpt-4o-mini",
-          label: "GPT-4o Mini",
-          hint: "Fast and cheap",
-        },
-        {
-          value: "google/gemini-2.0-flash",
-          label: "Gemini 2.0 Flash",
-          hint: "Fast and capable",
-        },
-        // MiniMax models (fast and cost-effective)
-        {
-          value: "minimax/MiniMax-Text-01",
-          label: "MiniMax Text 01",
-          hint: "Fast, cost-effective",
-        },
-        // Z.AI models
-        {
-          value: "z-ai/zy-1-preview",
-          label: "Z.AI Zy-1 Preview",
-          hint: "Fast Z.AI model",
-        },
-        // Custom option
-        {
-          value: "custom",
-          label: "Custom model...",
-          hint: "Enter your own provider/model",
-        },
-      ],
-      initialValue: DEFAULT_LITE,
-    });
-
-    if (p.isCancel(selectedLite)) {
-      p.cancel("Setup cancelled");
-      process.exit(0);
-    }
-    // Handle custom lite model
-    if (selectedLite === "custom") {
-      const customModel = await p.text({
-        message: "Enter lite model (provider/model format):",
-        placeholder: "e.g., minimax/MiniMax-Text-01",
-      });
-      if (p.isCancel(customModel) || !customModel) {
-        p.cancel("Setup cancelled");
-        process.exit(0);
-      }
-      liteModel = customModel;
-    } else {
-      liteModel = selectedLite;
-    }
+    // Model selection with search (like OpenCode)
+    coordinatorModel = await promptForModel("coordinator", COORDINATOR_MODELS);
+    workerModel = await promptForModel("worker", WORKER_MODELS);
+    liteModel = await promptForModel("lite", LITE_MODELS);
   }
 
   p.log.success("Selected models:");
