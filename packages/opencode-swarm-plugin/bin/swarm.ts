@@ -503,6 +503,41 @@ const COORDINATOR_MODELS: ModelOption[] = [
     label: "Gemini 1.5 Pro",
     hint: "More capable, larger context",
   },
+  // MiniMax models
+  {
+    value: "minimax/MiniMax-M2.1",
+    label: "MiniMax M2.1",
+    hint: "Fast, large context (up to 1M tokens)",
+  },
+  // Z.AI models
+  {
+    value: "z-ai/zy-1",
+    label: "Z.AI Zy-1",
+    hint: "Z.AI coding model",
+  },
+  {
+    value: "z-ai/zy-1-32k",
+    label: "Z.AI Zy-1-32k",
+    hint: "Z.AI with larger context",
+  },
+  // xAI (Grok)
+  {
+    value: "xai/grok-2-1212",
+    label: "Grok 2",
+    hint: "xAI's coding model",
+  },
+  // DeepSeek
+  {
+    value: "deepseek/deepseek-chat",
+    label: "DeepSeek Chat",
+    hint: "Strong coding capabilities",
+  },
+  // Custom option
+  {
+    value: "custom",
+    label: "Custom model...",
+    hint: "Enter your own provider/model",
+  },
 ];
 
 const WORKER_MODELS: ModelOption[] = [
@@ -525,6 +560,36 @@ const WORKER_MODELS: ModelOption[] = [
     value: "google/gemini-2.0-flash",
     label: "Gemini 2.0 Flash",
     hint: "Fast and capable",
+  },
+  // MiniMax models (fast and cost-effective)
+  {
+    value: "minimax/MiniMax-Text-01",
+    label: "MiniMax Text 01",
+    hint: "Fast, cost-effective",
+  },
+  // Z.AI models
+  {
+    value: "z-ai/zy-1-preview",
+    label: "Z.AI Zy-1 Preview",
+    hint: "Fast Z.AI model",
+  },
+  // Groq (ultra-fast inference)
+  {
+    value: "groq/llama-3.1-70b-versatile",
+    label: "Llama 3.1 70B (Groq)",
+    hint: "Ultra-fast inference",
+  },
+  // DeepSeek (good coding capabilities)
+  {
+    value: "deepseek/deepseek-coder",
+    label: "DeepSeek Coder",
+    hint: "Specialized for code",
+  },
+  // Custom option
+  {
+    value: "custom",
+    label: "Custom model...",
+    hint: "Enter your own provider/model",
   },
 ];
 
@@ -2208,26 +2273,58 @@ async function setup(forceReinstall = false, nonInteractive = false) {
 
     if (action === "models") {
       // Quick model update flow
-      const coordinatorModel = await p.select({
+      let selectedCoordinator = await p.select({
         message: "Select coordinator model:",
         options: COORDINATOR_MODELS,
         initialValue: "anthropic/claude-sonnet-4-5",
       });
 
-      if (p.isCancel(coordinatorModel)) {
+      if (p.isCancel(selectedCoordinator)) {
         p.cancel("Setup cancelled");
         process.exit(0);
       }
 
-      const workerModel = await p.select({
+      // Handle custom coordinator model
+      let coordinatorModel: string;
+      if (selectedCoordinator === "custom") {
+        const customModel = await p.text({
+          message: "Enter coordinator model (provider/model format):",
+          placeholder: "e.g., minimax/MiniMax-M2.1",
+        });
+        if (p.isCancel(customModel) || !customModel) {
+          p.cancel("Setup cancelled");
+          process.exit(0);
+        }
+        coordinatorModel = customModel;
+      } else {
+        coordinatorModel = selectedCoordinator;
+      }
+
+      let selectedWorker = await p.select({
         message: "Select worker model:",
         options: WORKER_MODELS,
         initialValue: "anthropic/claude-haiku-4-5",
       });
 
-      if (p.isCancel(workerModel)) {
+      if (p.isCancel(selectedWorker)) {
         p.cancel("Setup cancelled");
         process.exit(0);
+      }
+
+      // Handle custom worker model
+      let workerModel: string;
+      if (selectedWorker === "custom") {
+        const customModel = await p.text({
+          message: "Enter worker model (provider/model format):",
+          placeholder: "e.g., minimax/MiniMax-Text-01",
+        });
+        if (p.isCancel(customModel) || !customModel) {
+          p.cancel("Setup cancelled");
+          process.exit(0);
+        }
+        workerModel = customModel;
+      } else {
+        workerModel = selectedWorker;
       }
 
       // Update model lines in agent files (check both nested and legacy paths)
@@ -2547,43 +2644,7 @@ async function setup(forceReinstall = false, nonInteractive = false) {
 
     const selectedCoordinator = await p.select({
       message: "Select coordinator model (for orchestration/planning):",
-      options: [
-        {
-          value: "anthropic/claude-opus-4-5",
-          label: "Claude Opus 4.5",
-          hint: "Most capable, best for complex orchestration (recommended)",
-        },
-        {
-          value: "anthropic/claude-sonnet-4-5",
-          label: "Claude Sonnet 4.5",
-          hint: "Good balance of speed and capability",
-        },
-        {
-          value: "anthropic/claude-haiku-4-5",
-          label: "Claude Haiku 4.5",
-          hint: "Fast and cost-effective",
-        },
-        {
-          value: "openai/gpt-4o",
-          label: "GPT-4o",
-          hint: "Fast, good for most tasks",
-        },
-        {
-          value: "openai/gpt-4-turbo",
-          label: "GPT-4 Turbo",
-          hint: "Powerful, more expensive",
-        },
-        {
-          value: "google/gemini-2.0-flash",
-          label: "Gemini 2.0 Flash",
-          hint: "Fast and capable",
-        },
-        {
-          value: "google/gemini-1.5-pro",
-          label: "Gemini 1.5 Pro",
-          hint: "More capable",
-        },
-      ],
+      options: COORDINATOR_MODELS,
       initialValue: DEFAULT_COORDINATOR,
     });
 
@@ -2591,47 +2652,24 @@ async function setup(forceReinstall = false, nonInteractive = false) {
       p.cancel("Setup cancelled");
       process.exit(0);
     }
-    coordinatorModel = selectedCoordinator;
+    // Handle custom coordinator model
+    if (selectedCoordinator === "custom") {
+      const customModel = await p.text({
+        message: "Enter coordinator model (provider/model format):",
+        placeholder: "e.g., minimax/MiniMax-M2.1",
+      });
+      if (p.isCancel(customModel) || !customModel) {
+        p.cancel("Setup cancelled");
+        process.exit(0);
+      }
+      coordinatorModel = customModel;
+    } else {
+      coordinatorModel = selectedCoordinator;
+    }
 
     const selectedWorker = await p.select({
       message: "Select worker model (for task execution):",
-      options: [
-        {
-          value: "anthropic/claude-sonnet-4-5",
-          label: "Claude Sonnet 4.5",
-          hint: "Best balance of speed and capability (recommended)",
-        },
-        {
-          value: "anthropic/claude-haiku-4-5",
-          label: "Claude Haiku 4.5",
-          hint: "Fast and cost-effective",
-        },
-        {
-          value: "anthropic/claude-opus-4-5",
-          label: "Claude Opus 4.5",
-          hint: "Most capable, slower",
-        },
-        {
-          value: "openai/gpt-4o",
-          label: "GPT-4o",
-          hint: "Fast, good for most tasks",
-        },
-        {
-          value: "openai/gpt-4-turbo",
-          label: "GPT-4 Turbo",
-          hint: "Powerful, more expensive",
-        },
-        {
-          value: "google/gemini-2.0-flash",
-          label: "Gemini 2.0 Flash",
-          hint: "Fast and capable",
-        },
-        {
-          value: "google/gemini-1.5-pro",
-          label: "Gemini 1.5 Pro",
-          hint: "More capable",
-        },
-      ],
+      options: WORKER_MODELS,
       initialValue: DEFAULT_WORKER,
     });
 
@@ -2639,7 +2677,20 @@ async function setup(forceReinstall = false, nonInteractive = false) {
       p.cancel("Setup cancelled");
       process.exit(0);
     }
-    workerModel = selectedWorker;
+    // Handle custom worker model
+    if (selectedWorker === "custom") {
+      const customModel = await p.text({
+        message: "Enter worker model (provider/model format):",
+        placeholder: "e.g., minimax/MiniMax-Text-01",
+      });
+      if (p.isCancel(customModel) || !customModel) {
+        p.cancel("Setup cancelled");
+        process.exit(0);
+      }
+      workerModel = customModel;
+    } else {
+      workerModel = selectedWorker;
+    }
 
     // Lite model selection for simple tasks (docs, tests)
     const selectedLite = await p.select({
@@ -2665,6 +2716,24 @@ async function setup(forceReinstall = false, nonInteractive = false) {
           label: "Gemini 2.0 Flash",
           hint: "Fast and capable",
         },
+        // MiniMax models (fast and cost-effective)
+        {
+          value: "minimax/MiniMax-Text-01",
+          label: "MiniMax Text 01",
+          hint: "Fast, cost-effective",
+        },
+        // Z.AI models
+        {
+          value: "z-ai/zy-1-preview",
+          label: "Z.AI Zy-1 Preview",
+          hint: "Fast Z.AI model",
+        },
+        // Custom option
+        {
+          value: "custom",
+          label: "Custom model...",
+          hint: "Enter your own provider/model",
+        },
       ],
       initialValue: DEFAULT_LITE,
     });
@@ -2673,7 +2742,20 @@ async function setup(forceReinstall = false, nonInteractive = false) {
       p.cancel("Setup cancelled");
       process.exit(0);
     }
-    liteModel = selectedLite;
+    // Handle custom lite model
+    if (selectedLite === "custom") {
+      const customModel = await p.text({
+        message: "Enter lite model (provider/model format):",
+        placeholder: "e.g., minimax/MiniMax-Text-01",
+      });
+      if (p.isCancel(customModel) || !customModel) {
+        p.cancel("Setup cancelled");
+        process.exit(0);
+      }
+      liteModel = customModel;
+    } else {
+      liteModel = selectedLite;
+    }
   }
 
   p.log.success("Selected models:");
