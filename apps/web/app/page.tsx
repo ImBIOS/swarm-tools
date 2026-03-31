@@ -1,12 +1,12 @@
 import {
-	BookOpen,
-	Brain,
-	CheckCircle2,
-	GitBranch,
-	Github,
-	MessageSquare,
-	Terminal,
-	Zap,
+    BookOpen,
+    Brain,
+    CheckCircle2,
+    GitBranch,
+    Github,
+    MessageSquare,
+    Terminal,
+    Zap,
 } from "lucide-react";
 import type { Metadata } from "next";
 
@@ -50,7 +50,7 @@ const jsonLd = {
 	},
 	author: {
 		"@type": "Person",
-		name: "Joel Hooks",
+		name: "Imamuzzaki Abu Salam",
 		url: "https://github.com/joelhooks",
 	},
 	url: "https://swarmtools.ai",
@@ -317,12 +317,12 @@ export default function Home() {
 								className="font-mono text-[0.5rem] leading-tight text-amber-500/40 sm:text-xs text-center select-none"
 								aria-hidden="true"
 							>
-								{`    ___       ___       ___       ___   
-   /   \\     /   \\     /   \\     /   \\  
+								{`    ___       ___       ___       ___
+   /   \\     /   \\     /   \\     /   \\
   /  🐝 \\___/  ⚡ \\___/  💬 \\___/  🧠 \\
   \\     /   \\     /   \\     /   \\     /
-   \\___/     \\___/     \\___/     \\___/ 
-   /   \\     /   \\     /   \\     /   \\  
+   \\___/     \\___/     \\___/     \\___/
+   /   \\     /   \\     /   \\     /   \\
   / PAR \\___/ GIT \\___/ MSG \\___/ LRN \\
   \\ ALL /   \\ BCK /   \\ ING /   \\ ING /
    \\___/     \\___/     \\___/     \\___/`}
@@ -736,7 +736,7 @@ swarm migrate   # Migrate legacy databases`}
 								rel="noopener noreferrer author"
 								className="text-neutral-500 hover:text-amber-500 transition-colors"
 							>
-								Joel Hooks
+								Imamuzzaki Abu Salam
 							</a>{" "}
 							• Open source under MIT License
 						</p>

@@ -23,7 +23,7 @@
     "type": "git",
     "url": "https://github.com/joelhooks/opencode-swarm-plugin"
   },
-  "author": "Joel Hooks",
+  "author": "Imamuzzaki Abu Salam",
   "license": "MIT",
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node --external bullmq --external ioredis && tsc",

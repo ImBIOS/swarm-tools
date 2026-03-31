@@ -1,8 +1,7 @@
-import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
 import { RootProvider } from 'fumadocs-ui/provider/next';
-import { Geist, Geist_Mono } from 'next/font/google';
-import { IBM_Plex_Mono } from 'next/font/google';
+import type { Metadata } from 'next';
+import { Geist, Geist_Mono, IBM_Plex_Mono } from 'next/font/google';
+import type { ReactNode } from 'react';
 import './globals.css';
 
 const geist = Geist({
@@ -31,8 +30,8 @@ export const metadata: Metadata = {
 	},
 	description: 'Event sourcing, multi-agent coordination, and durable execution patterns for AI coding assistants. TypeScript primitives.',
 	keywords: ['swarm', 'multi-agent', 'AI', 'event sourcing', 'coordination', 'Effect-TS', 'OpenCode', 'agentic'],
-	authors: [{ name: 'Joel Hooks', url: 'https://github.com/joelhooks' }],
-	creator: 'Joel Hooks',
+	authors: [{ name: 'Imamuzzaki Abu Salam', url: 'https://github.com/joelhooks' }],
+	creator: 'Imamuzzaki Abu Salam',
 	publisher: 'Swarm Tools',
 	robots: {
 		index: true,
@@ -83,7 +82,7 @@ const consoleArt = `
       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝
 
    🐝 framework-agnostic primitives for agentic systems
-   
+
    https://github.com/joelhooks/opencode-swarm-plugin
 `;
 

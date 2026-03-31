@@ -5,6 +5,7 @@
 The swarm dashboard uses a hybrid data fetching strategy:
 
 ### SSE Event Stream (Real-time Events)
+
 - **Source**: `http://localhost:3001/events` (Durable Stream Server)
 - **Components**: AgentsPane, EventsPane
 - **Pattern**: Derive state from events using `useMemo()`
@@ -12,6 +13,7 @@ The swarm dashboard uses a hybrid data fetching strategy:
 - **Why**: Event stream is immutable, rebuilding state on each event is safe
 
 ### REST API (Snapshot Data)
+
 - **Source**: `http://localhost:3001/cells` (TODO: needs implementation)
 - **Components**: CellsPane
 - **Pattern**: `useEffect` + polling (5s interval)
@@ -21,12 +23,14 @@ The swarm dashboard uses a hybrid data fetching strategy:
 ## CellsPane Implementation
 
 **Files Modified**:
+
 - `src/lib/api.ts` - Added `getCells()` function with tree-building logic
 - `src/components/CellsPane.tsx` - Replaced mock data with real API calls
 - `src/lib/api.test.ts` - TDD tests for getCells
 - `src/components/CellsPane.test.tsx` - Component tests
 
 **Key Features**:
+
 - Auto-refresh every 5 seconds
 - Loading states (initial + refresh)
 - Error handling with fallback to empty array
@@ -34,6 +38,7 @@ The swarm dashboard uses a hybrid data fetching strategy:
 - Cell count display (total + open count)
 
 **Tree Building Algorithm**:
+
 1. Fetch flat array from API
 2. Build Map<cellId, Cell> for O(1) lookup
 3. Second pass: attach children to parents or mark as root
@@ -43,6 +48,7 @@ The swarm dashboard uses a hybrid data fetching strategy:
 ## AgentsPane (Already Working)
 
 **Pattern**: Event-driven state derivation
+
 - Listens to: agent_registered, agent_active, task_started, task_progress, task_completed
 - Builds Map<agent_name, Agent> from events
 - Determines active vs idle based on 5min threshold
@@ -55,6 +61,7 @@ The swarm dashboard uses a hybrid data fetching strategy:
 The dashboard expects `GET /cells` endpoint at the SSE server.
 
 **Expected response**:
+
 ```json
 {
   "cells": [
@@ -73,6 +80,7 @@ The dashboard expects `GET /cells` endpoint at the SSE server.
 **Implementation location**: `swarm-mail/src/streams/durable-server.ts`
 
 **Required logic**:
+
 ```typescript
 // In fetch handler, add route:
 if (url.pathname === "/cells") {

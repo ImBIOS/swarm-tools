@@ -42,6 +42,7 @@ swarm-mail currently captures outcomes as isolated events:
 ```
 
 This tells us the task succeeded. It doesn't tell us:
+
 - **WHY** this decomposition strategy was chosen
 - **WHAT** precedent influenced file assignments
 - **HOW** conflicts were resolved
@@ -50,6 +51,7 @@ This tells us the task succeeded. It doesn't tell us:
 ### What We're Missing (Decision Context)
 
 When a coordinator spawns workers, it makes decisions:
+
 - "Use file-based strategy because feature-based failed on similar tasks 3 times"
 - "Assign auth.ts to Worker A based on past success rate with auth code"
 - "Grant exception to merge src/auth/** into one subtask despite overlap guideline"
@@ -60,11 +62,13 @@ When a coordinator spawns workers, it makes decisions:
 ### The Precedent Problem
 
 Semantic memory stores learnings AFTER the fact:
+
 ```
 "OAuth refresh needs 5min buffer to avoid race conditions"
 ```
 
 But it doesn't capture:
+
 - **WHEN** was this pattern discovered? (which epic, which subtask)
 - **WHO** decided to apply this pattern? (which coordinator, which worker)
 - **WHAT** alternatives were tried first? (immediate refresh, 1min buffer)
@@ -137,43 +141,43 @@ We propose adding a **Decision Trace** layer on top of the existing event store.
  */
 export const decisionTracesTable = sqliteTable("decision_traces", {
   id: text("id").primaryKey(), // dt-{nanoid}
-  
+
   // What decision was made
-  decision_type: text("decision_type").notNull(), 
-  // 'decomposition_strategy', 'file_assignment', 'exception_granted', 
+  decision_type: text("decision_type").notNull(),
+  // 'decomposition_strategy', 'file_assignment', 'exception_granted',
   // 'review_approval', 'conflict_resolution'
-  
+
   // Context
   epic_id: text("epic_id"),
   bead_id: text("bead_id"),
   agent_name: text("agent_name").notNull(),
   project_key: text("project_key").notNull(),
-  
+
   // The decision
   decision: text("decision").notNull(), // JSON: actual decision made
-  
+
   // Why this decision
   rationale: text("rationale"), // Human-readable explanation
-  
+
   // Inputs considered
   inputs_gathered: text("inputs_gathered"), // JSON: what data was examined
   // { cass_queries: [...], semantic_memory: [...], past_outcomes: [...] }
-  
+
   // Policy evaluated
   policy_evaluated: text("policy_evaluated"), // JSON: what rules applied
   // { guideline: "avoid file overlap", exception: "similar epic precedent" }
-  
+
   // Alternatives considered
   alternatives: text("alternatives"), // JSON: what else was considered
   // [{ option: "feature-based", rejected_because: "70% failure rate" }]
-  
+
   // Precedent referenced
   precedent_cited: text("precedent_cited"), // JSON: specific precedent
   // [{ epic_id: "mj100", reason: "solved OAuth refresh same way" }]
-  
+
   // Outcome link
   outcome_event_id: integer("outcome_event_id"), // FK to events.id
-  
+
   // Metadata
   timestamp: integer("timestamp").notNull(),
   created_at: text("created_at").default("(datetime('now'))"),
@@ -201,28 +205,28 @@ export type NewDecisionTrace = typeof decisionTracesTable.$inferInsert;
  */
 export const entityLinksTable = sqliteTable("entity_links", {
   id: text("id").primaryKey(),
-  
+
   // Source decision
   source_decision_id: text("source_decision_id")
     .notNull()
     .references(() => decisionTracesTable.id, { onDelete: "cascade" }),
-  
+
   // Target entity (epic, pattern, file, agent)
-  target_entity_type: text("target_entity_type").notNull(), 
+  target_entity_type: text("target_entity_type").notNull(),
   // 'epic', 'pattern', 'file', 'agent', 'memory'
   target_entity_id: text("target_entity_id").notNull(),
-  
+
   // Relationship type
   link_type: text("link_type").notNull(),
-  // 'cites_precedent', 'applies_pattern', 'similar_to', 
+  // 'cites_precedent', 'applies_pattern', 'similar_to',
   // 'resolves_conflict_from', 'learned_from'
-  
+
   // Link strength (for ranking/filtering)
   strength: real("strength").default(1.0), // 0-1
-  
+
   // Context
   context: text("context"), // Why this link matters
-  
+
   // Metadata
   created_at: text("created_at").default("(datetime('now'))"),
 }, (table) => ({
@@ -264,13 +268,13 @@ async function captureDecompositionDecision(
     epic_id: context.epicId,
     agent_name: context.agentName,
     project_key: context.projectKey,
-    
+
     decision: JSON.stringify({
       strategy: context.selectedStrategy,
     }),
-    
+
     rationale: `Selected ${context.selectedStrategy} based on ${context.cassResults.length} CASS precedents and ${context.semanticMemoryResults.length} semantic memory patterns`,
-    
+
     inputs_gathered: JSON.stringify({
       cass_queries: context.cassResults.map(r => ({
         query: r.query,
@@ -283,12 +287,12 @@ async function captureDecompositionDecision(
         decay: r.decay_factor,
       })),
     }),
-    
+
     alternatives: JSON.stringify(context.alternatives),
-    
+
     precedent_cited: JSON.stringify(context.precedentCited),
   });
-  
+
   // Link to cited precedent epics
   for (const precedent of context.precedentCited) {
     await linkEntityToPrecedent(swarmMail, {
@@ -300,7 +304,7 @@ async function captureDecompositionDecision(
       strength: 1.0,
     });
   }
-  
+
   return trace;
 }
 ```
@@ -325,24 +329,24 @@ async function captureFileAssignmentDecision(
     bead_id: context.beadId,
     agent_name: context.agentName,
     project_key: context.projectKey,
-    
+
     decision: JSON.stringify({
       files: context.files,
       assigned_to: context.agentName,
     }),
-    
+
     rationale: context.rationale,
-    
+
     inputs_gathered: JSON.stringify({
       file_insights: context.fileInsights,
     }),
-    
+
     policy_evaluated: JSON.stringify({
       guideline: "assign files with low failure counts",
       applied: context.fileInsights.every(f => f.failureCount < 3),
     }),
   });
-  
+
   // Link to files
   for (const file of context.files) {
     await linkEntityToPrecedent(swarmMail, {
@@ -353,7 +357,7 @@ async function captureFileAssignmentDecision(
       strength: 1.0,
     });
   }
-  
+
   return trace;
 }
 ```
@@ -378,16 +382,16 @@ async function captureReviewDecision(
     bead_id: context.beadId,
     agent_name: context.reviewerAgent,
     project_key: context.projectKey,
-    
+
     decision: JSON.stringify({
       status: context.status,
       issues: context.issues,
     }),
-    
-    rationale: context.status === "approved" 
+
+    rationale: context.status === "approved"
       ? "Work fulfills subtask requirements and serves epic goal"
       : `Found ${context.issues.length} issues requiring changes`,
-    
+
     policy_evaluated: JSON.stringify({
       guidelines: [
         "type safety",
@@ -398,7 +402,7 @@ async function captureReviewDecision(
       violations: context.policyViolations,
     }),
   });
-  
+
   return trace;
 }
 ```
@@ -413,7 +417,7 @@ async function findDecisionsByCitedPrecedent(
   epicId: string
 ): Promise<DecisionTrace[]> {
   const db = await swarmMail.getDatabase();
-  
+
   const query = `
     SELECT dt.*
     FROM decision_traces dt
@@ -423,7 +427,7 @@ async function findDecisionsByCitedPrecedent(
       AND el.link_type = 'cites_precedent'
     ORDER BY dt.timestamp DESC
   `;
-  
+
   const result = await db.query(query, [epicId]);
   return result.rows as DecisionTrace[];
 }
@@ -437,7 +441,7 @@ async function findDecisionsByPattern(
   patternId: string // from semantic memory
 ): Promise<DecisionTrace[]> {
   const db = await swarmMail.getDatabase();
-  
+
   const query = `
     SELECT dt.*
     FROM decision_traces dt
@@ -447,7 +451,7 @@ async function findDecisionsByPattern(
       AND el.link_type = 'applies_pattern'
     ORDER BY dt.timestamp DESC
   `;
-  
+
   const result = await db.query(query, [patternId]);
   return result.rows as DecisionTrace[];
 }
@@ -461,9 +465,9 @@ async function findFileAssignmentHistory(
   filePath: string
 ): Promise<Array<DecisionTrace & { outcome?: any }>> {
   const db = await swarmMail.getDatabase();
-  
+
   const query = `
-    SELECT 
+    SELECT
       dt.*,
       e.data as outcome_data
     FROM decision_traces dt
@@ -474,7 +478,7 @@ async function findFileAssignmentHistory(
       AND el.target_entity_id = ?
     ORDER BY dt.timestamp DESC
   `;
-  
+
   const result = await db.query(query, [filePath]);
   return result.rows.map(row => ({
     ...row,
@@ -500,14 +504,14 @@ async function getDecisionTraceWithContext(
   outcome: any | null;
 }> {
   const db = await swarmMail.getDatabase();
-  
+
   // Get decision trace
   const traceResult = await db.query(
     `SELECT * FROM decision_traces WHERE id = ?`,
     [decisionId]
   );
   const trace = traceResult.rows[0] as DecisionTrace;
-  
+
   // Get entity links
   const linksResult = await db.query(
     `SELECT * FROM entity_links WHERE source_decision_id = ?`,
@@ -519,7 +523,7 @@ async function getDecisionTraceWithContext(
     link_type: string;
     context: string | null;
   }>;
-  
+
   // Get outcome event if linked
   let outcome = null;
   if (trace.outcome_event_id) {
@@ -531,7 +535,7 @@ async function getDecisionTraceWithContext(
       outcome = JSON.parse(outcomeResult.rows[0].data);
     }
   }
-  
+
   return {
     trace,
     links: links.map(l => ({
@@ -554,23 +558,23 @@ async function getDecisionTraceWithContext(
 export async function swarmDecompose(task: string, context?: string) {
   const cassResults = await cassSearch(task);
   const memoryResults = await semanticMemoryFind(task);
-  
+
   const strategy = selectStrategy(cassResults, memoryResults);
-  
+
   // Generate decomposition...
 }
 
 // After (with decision traces)
 export async function swarmDecompose(
   swarmMail: SwarmMailAdapter,
-  task: string, 
+  task: string,
   context?: string
 ) {
   const cassResults = await cassSearch(task);
   const memoryResults = await semanticMemoryFind(task);
-  
+
   const strategySelection = selectStrategy(cassResults, memoryResults);
-  
+
   // Capture decision trace
   await captureDecompositionDecision(swarmMail, {
     epicId: generateEpicId(),
@@ -582,7 +586,7 @@ export async function swarmDecompose(
     alternatives: strategySelection.alternatives,
     precedentCited: strategySelection.precedent,
   });
-  
+
   // Generate decomposition...
 }
 ```
@@ -612,6 +616,7 @@ swarm query --preset review_decisions_rejected
 - [ ] Write unit tests for schema validation
 
 **Success Criteria:**
+
 - Tables created successfully
 - Foreign keys working (decision → event)
 - Indexes perform efficiently (<10ms for typical queries)
@@ -628,6 +633,7 @@ swarm query --preset review_decisions_rejected
 - [ ] Write integration tests for capture flow
 
 **Success Criteria:**
+
 - Decision traces captured for decomposition, assignment, review
 - Entity links created for precedent citations
 - No performance degradation (capture async, non-blocking)
@@ -649,6 +655,7 @@ swarm query --preset review_decisions_rejected
 - [ ] Write query performance tests
 
 **Success Criteria:**
+
 - Queries return results <100ms for typical datasets
 - CLI commands working and documented
 - Dashboard shows decision rationale inline with events
@@ -664,6 +671,7 @@ swarm query --preset review_decisions_rejected
 - [ ] Add eval scorers for decision quality
 
 **Success Criteria:**
+
 - Strategy selection cites relevant past decisions
 - Semantic memory patterns show "used in N decisions"
 - Learning feedback loop measurable (decision quality improves over time)
@@ -700,21 +708,25 @@ swarm query --preset review_decisions_rejected
 ### Benefits
 
 **1. Queryable Precedent**
+
 - "Show me all decisions that applied the OAuth buffer pattern"
 - "What was the context when we decided to use file-based strategy for auth?"
 - "Which epics cited mj100 as precedent?"
 
 **2. Transparent Decision-Making**
+
 - Coordinators explain WHY they chose a strategy
 - Reviewers document WHY work was approved/rejected
 - Exceptions have documented rationale
 
 **3. Better Learning**
+
 - Semantic memory patterns linked to actual decisions
 - Strategy selection cites specific past outcomes
 - Failed patterns show WHERE and WHY they failed
 
 **4. Debugging Coordination**
+
 - "Why did coordinator choose this file split?"
 - "What precedent influenced this exception?"
 - "Which alternatives were considered?"
@@ -722,22 +734,26 @@ swarm query --preset review_decisions_rejected
 ### Tradeoffs
 
 **1. Storage Overhead**
+
 - Decision traces add ~500 bytes per decision
 - Entity links add ~200 bytes per link
 - Typical epic: 5-10 decisions, 10-20 links = ~10KB total
 - **Mitigation:** Compress JSON fields, archive old traces
 
 **2. Capture Complexity**
+
 - Coordinators must explicitly capture decision context
 - Risk of incomplete/inconsistent traces
 - **Mitigation:** Helper functions with sane defaults, validation
 
 **3. Query Complexity**
+
 - Joins across decision_traces, entity_links, events
 - Risk of slow queries on large datasets
 - **Mitigation:** Strategic indexes, query result caching
 
 **4. Schema Evolution**
+
 - Decision types may change over time
 - Entity link types may need new categories
 - **Mitigation:** JSON fields flexible, add new types incrementally
@@ -749,6 +765,7 @@ swarm query --preset review_decisions_rejected
 **Idea:** Add `rationale` and `precedent_cited` fields to existing events
 
 **Rejected Because:**
+
 - Event payloads already large (some >1KB)
 - Entity linking requires separate table for efficient queries
 - Precedent queries would require full table scans
@@ -759,6 +776,7 @@ swarm query --preset review_decisions_rejected
 **Idea:** Store decision context as memories with special tags
 
 **Rejected Because:**
+
 - Semantic memory is for learnings, not operational data
 - Vector search not optimized for entity linking queries
 - No structured schema for decision types
@@ -769,6 +787,7 @@ swarm query --preset review_decisions_rejected
 **Idea:** Use Neo4j or similar graph database for decision traces
 
 **Rejected Because:**
+
 - Adds deployment dependency (another service to run)
 - swarm-mail already has libSQL with good JSON/query support
 - Entity links can be modeled relationally with indexes
@@ -777,11 +796,13 @@ swarm query --preset review_decisions_rejected
 ## References
 
 **External:**
+
 - [a16z Context Graph Thesis](https://a16z.com/context-graphs/) - Core inspiration
 - [Event Sourcing in Practice](https://martinfowler.com/eaaDev/EventSourcing.html) - Fowler
 - [Decision Records](https://adr.github.io/) - ADR pattern we're extending
 
 **Internal:**
+
 - `packages/swarm-mail/src/streams/events.ts` - Current event types
 - `packages/swarm-mail/src/db/schema/streams.ts` - Database schema
 - `packages/swarm-mail/src/memory/` - Semantic memory implementation
@@ -789,14 +810,14 @@ swarm query --preset review_decisions_rejected
 
 ## Quote from the Craft
 
-> "The best way to predict the future is to look at the past. But to understand the past, you need to know not just what happened, but why it happened. That's the difference between data and knowledge." 
+> "The best way to predict the future is to look at the past. But to understand the past, you need to know not just what happened, but why it happened. That's the difference between data and knowledge."
 > — *Designing Data-Intensive Applications*, Martin Kleppmann
 
 *(Retrieved via pdf-brain_search: "event sourcing context knowledge")*
 
 ---
 
-**Status:** Proposed  
-**Deciders:** Joel Hooks, swarm coordinators  
-**Date:** 2025-12-27  
+**Status:** Proposed
+**Deciders:** Imamuzzaki Abu Salam, swarm coordinators
+**Date:** 2025-12-27
 **Tags:** #architecture #event-sourcing #context-graph #decision-traces

@@ -3,7 +3,7 @@
   "description": "Multi-agent task decomposition and coordination for Claude Code",
   "version": "0.63.0",
   "author": {
-    "name": "Joel Hooks"
+    "name": "Imamuzzaki Abu Salam"
   },
   "repository": "https://github.com/joelhooks/opencode-swarm-plugin",
   "keywords": [

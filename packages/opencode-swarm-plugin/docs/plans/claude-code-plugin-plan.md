@@ -7,6 +7,7 @@
 ## Overview
 
 Create a Claude Code plugin that exposes swarm functionality through:
+
 - Slash commands for common operations
 - Skills for auto-invoked coordination knowledge
 - Hooks for session lifecycle
@@ -43,6 +44,7 @@ packages/opencode-swarm-plugin/
 ```
 
 **Plugin root rules (Claude Code docs):**
+
 - `.claude-plugin/` contains **only** `plugin.json`.
 - Everything needed at runtime must live **inside** the plugin root.
 - Installed plugins are cached, so avoid any `../` references or external paths.
@@ -59,7 +61,7 @@ packages/opencode-swarm-plugin/
   "description": "Multi-agent task decomposition and coordination for Claude Code",
   "version": "0.1.0",
   "author": {
-    "name": "Joel Hooks"
+    "name": "Imamuzzaki Abu Salam"
   },
   "repository": {
     "type": "git",
@@ -91,6 +93,7 @@ Claude Code expects the **standard MCP schema**:
 ```
 
 **Option B (embedded entrypoint inside plugin root)**
+
 ```json
 {
   "mcpServers": {
@@ -119,6 +122,7 @@ description: Multi-agent task decomposition and parallel execution. Use when dec
 ```
 
 Content covers:
+
 - When to use swarm (parallelizable tasks, multi-file changes)
 - Coordinator vs Worker patterns
 - Tool naming conventions (`mcp__swarm-tools__hive_create`)
@@ -139,6 +143,7 @@ description: Decompose a task into parallel subtasks and coordinate execution
 ```
 
 Prompts Claude to:
+
 1. Analyze the task for parallelization opportunities
 2. Create an epic with subtasks using `hive_create_epic`
 3. Initialize swarm mail session
@@ -158,6 +163,7 @@ description: Query and manage swarm tasks (cells)
 ```
 
 Operations:
+
 - List open/in-progress tasks
 - Create new tasks
 - Update task status
@@ -165,6 +171,7 @@ Operations:
 - Show task hierarchy
 
 **Usage**:
+
 - `/swarm:hive` - show current tasks
 - `/swarm:hive create "Fix auth bug"` - create task
 - `/swarm:hive close bd-123 "Done"` - close task
@@ -180,6 +187,7 @@ description: Check swarm coordination status - workers, messages, reservations
 ```
 
 Shows:
+
 - Active epic and subtasks
 - Worker status (if coordinator)
 - File reservations
@@ -211,6 +219,7 @@ description: Properly end a swarm session - release reservations, sync state, ge
 ```
 
 Does:
+
 1. Release file reservations
 2. Update task statuses
 3. Sync hive to git
@@ -243,6 +252,7 @@ tools:
 ```
 
 Instructions for:
+
 - Epic creation and decomposition
 - Worker spawning strategy
 - Progress monitoring
@@ -274,6 +284,7 @@ tools:
 ```
 
 Instructions for:
+
 - Initialize with subtask context
 - Reserve files before editing
 - Report progress via swarm mail
@@ -281,6 +292,7 @@ Instructions for:
 - Release reservations
 
 **Claude Code subagent constraints:**
+
 - Subagents do **not** inherit skills automatically; list `skills` explicitly.
 - Background subagents do **not** get MCP access, so keep tool-using workers in the foreground.
 
@@ -340,6 +352,7 @@ Instructions for:
 ```
 
 **Hook stdout behavior (Claude Code docs):**
+
 - Only `SessionStart` and `UserPromptSubmit` hook output is injected into context.
 - Use structured JSON: `{ "additionalContext": "..." }` for reliable injection.
 - `PreCompact` and `SessionEnd` output is **not** injected (use for side effects only).
@@ -385,6 +398,7 @@ swarm claude uninstall
 ```
 
 **Install flow guidance:**
+
 - Primary flow is Claude Code `/plugin` marketplace install or `claude /plugin install <name>`.
 - Symlink install is for local development only; installed plugins are cached, so avoid external paths.
 
@@ -422,6 +436,7 @@ import { allTools } from "../dist/index.js";
 **Note:** Keep the MCP server entrypoint inside the plugin root and import from bundled output that ships with the plugin.
 
 Key considerations:
+
 - Direct tool execution (no CLI spawn)
 - Session ID from environment or generated
 - Proper error handling and JSON responses
@@ -430,6 +445,7 @@ Key considerations:
 ## Implementation Order
 
 ### Sprint 1: Foundation
+
 1. [ ] Create `claude-plugin/` directory structure
 2. [ ] Write `plugin.json` manifest
 3. [ ] Implement `swarm mcp-serve` command
@@ -437,38 +453,43 @@ Key considerations:
 5. [ ] Test: `claude --plugin-dir ./claude-plugin` loads successfully
 
 ### Sprint 2: Core Skill & Commands
+
 6. [ ] Write `skills/swarm-coordination/SKILL.md`
-7. [ ] Write `commands/swarm.md` (main decomposition)
-8. [ ] Write `commands/hive.md` (task management)
-9. [ ] Write `commands/status.md`
-10. [ ] Test: Slash commands work
+2. [ ] Write `commands/swarm.md` (main decomposition)
+3. [ ] Write `commands/hive.md` (task management)
+4. [ ] Write `commands/status.md`
+5. [ ] Test: Slash commands work
 
 ### Sprint 3: Agents
+
 11. [ ] Write `agents/coordinator.md`
-12. [ ] Write `agents/worker.md`
-13. [ ] Test: Subagent spawning works
+2. [ ] Write `agents/worker.md`
+3. [ ] Test: Subagent spawning works
 
 ### Sprint 4: Hooks & Lifecycle
+
 14. [ ] Write `hooks/hooks.json`
-15. [ ] Implement `swarm claude session-start`
-16. [ ] Implement `swarm claude pre-compact`
-17. [ ] Implement `swarm claude session-end`
-18. [ ] Test: Hooks fire correctly
+2. [ ] Implement `swarm claude session-start`
+3. [ ] Implement `swarm claude pre-compact`
+4. [ ] Implement `swarm claude session-end`
+5. [ ] Test: Hooks fire correctly
 
 ### Sprint 5: CLI Integration
+
 19. [ ] Implement `swarm claude path`
-20. [ ] Implement `swarm claude install`
-21. [ ] Implement `swarm claude uninstall`
-22. [ ] Implement `swarm claude init` (standalone mode)
-23. [ ] Update `swarm setup` to offer Claude Code option
-24. [ ] Test: Full installation flow
+2. [ ] Implement `swarm claude install`
+3. [ ] Implement `swarm claude uninstall`
+4. [ ] Implement `swarm claude init` (standalone mode)
+5. [ ] Update `swarm setup` to offer Claude Code option
+6. [ ] Test: Full installation flow
 
 ### Sprint 6: Polish
+
 25. [ ] Write commands/inbox.md
-26. [ ] Write commands/handoff.md
-27. [ ] Add to swarm doctor (Claude Code checks)
-28. [ ] Documentation in README
-29. [ ] Test: End-to-end swarm coordination in Claude Code
+2. [ ] Write commands/handoff.md
+3. [ ] Add to swarm doctor (Claude Code checks)
+4. [ ] Documentation in README
+5. [ ] Test: End-to-end swarm coordination in Claude Code
 
 ## Dependency: swarm-mail Package
 
@@ -580,16 +601,19 @@ swarm claude install
 ## Testing Strategy
 
 ### Unit Tests
+
 - MCP server tool registration
 - Hook command output
 - CLI command behavior
 
 ### Integration Tests
+
 - Plugin loads in Claude Code
 - Slash commands execute tools
 - Hooks fire at correct lifecycle points
 
 ### E2E Tests
+
 - Full swarm decomposition flow
 - Coordinator spawns workers
 - Workers complete and report back

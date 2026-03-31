@@ -1,7 +1,7 @@
 {
   "name": "swarm-tools",
   "owner": {
-    "name": "Joel Hooks"
+    "name": "Imamuzzaki Abu Salam"
   },
   "metadata": {
     "description": "Swarm Tools marketplace for Claude Code"
@@ -13,7 +13,7 @@
       "description": "Multi-agent coordination for Claude Code (delegates to swarm CLI)",
       "version": "0.62.0",
       "author": {
-        "name": "Joel Hooks"
+        "name": "Imamuzzaki Abu Salam"
       }
     }
   ]
