@@ -483,24 +483,39 @@ interface ModelsDevProvider {
   models: Record<string, { name: string; status?: string }>;
 }
 
-// Read connected providers from OpenCode config
-async function getConnectedProviders(): Promise<Set<string>> {
+interface OpenCodeConfig {
+  provider?: Record<string, {
+    models?: Record<string, { name?: string }>;
+    [key: string]: unknown;
+  }>;
+  model?: string;
+}
+
+function getConnectedProviders(): { providers: Set<string>; customModels: ModelOption[] } {
   const configPath = join(homedir(), ".config", "opencode", "opencode.json");
   const providers = new Set<string>();
+  const customModels: ModelOption[] = [];
 
-  if (!existsSync(configPath)) return providers;
+  if (!existsSync(configPath)) return { providers, customModels };
 
   try {
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenCodeConfig;
     if (config.provider) {
-      for (const providerId of Object.keys(config.provider)) {
+      for (const [providerId, provider] of Object.entries(config.provider)) {
         providers.add(providerId.toLowerCase());
+        if (provider.models) {
+          for (const [modelId, model] of Object.entries(provider.models)) {
+            customModels.push({
+              value: `${providerId}/${modelId}`,
+              label: model.name || modelId,
+              hint: providerId,
+            });
+          }
+        }
       }
     }
-    // Also check for provider.model setting
     if (config.model && typeof config.model === "string") {
       const modelStr = config.model;
-      // Common provider prefixes
       const knownProviders = [
         "anthropic",
         "openai",
@@ -521,25 +536,23 @@ async function getConnectedProviders(): Promise<Set<string>> {
     // Ignore parse errors
   }
 
-  return providers;
+  return { providers, customModels };
 }
 
-// Fetch models from models.dev (same source as OpenCode)
-// Throws error if fetch fails - no fallback
 let cachedAllModels: ModelOption[] | null = null;
 
 async function fetchModelsFromModelsDev(): Promise<ModelOption[]> {
-  const connectedProviders = await getConnectedProviders();
+  const { providers: connectedProviders, customModels } = getConnectedProviders();
 
   if (cachedAllModels) {
-    // Filter to only connected providers
     if (connectedProviders.size > 0) {
-      return cachedAllModels.filter((m) => {
+      const filtered = cachedAllModels.filter((m) => {
         const providerId = m.value.split("/")[0].toLowerCase();
         return connectedProviders.has(providerId);
       });
+      return mergeWithCustomModels(filtered, customModels);
     }
-    return cachedAllModels;
+    return mergeWithCustomModels(cachedAllModels, customModels);
   }
 
   const response = await fetch("https://models.dev/api.json", {
@@ -551,16 +564,13 @@ async function fetchModelsFromModelsDev(): Promise<ModelOption[]> {
   const models: ModelOption[] = [];
 
   for (const [providerId, provider] of Object.entries(data)) {
-    // Skip providers not connected in OpenCode (if any connected)
     if (connectedProviders.size > 0 && !connectedProviders.has(providerId.toLowerCase())) {
       continue;
     }
 
     for (const [modelId, model] of Object.entries(provider.models || {})) {
-      // Skip deprecated/alpha models
       if (model.status === "deprecated" || model.status === "alpha") continue;
 
-      // Use friendly name or format modelId
       const label = model.name || `${provider.name} ${modelId}`;
 
       models.push({
@@ -571,7 +581,6 @@ async function fetchModelsFromModelsDev(): Promise<ModelOption[]> {
     }
   }
 
-  // Sort by provider name, then model name
   models.sort((a, b) => {
     const providerCompare = a.hint?.localeCompare(b.hint || "") || 0;
     if (providerCompare !== 0) return providerCompare;
@@ -579,7 +588,17 @@ async function fetchModelsFromModelsDev(): Promise<ModelOption[]> {
   });
 
   cachedAllModels = models;
-  return models;
+  return mergeWithCustomModels(models, customModels);
+}
+
+function mergeWithCustomModels(registryModels: ModelOption[], customModels: ModelOption[]): ModelOption[] {
+  const merged = [...registryModels];
+  for (const custom of customModels) {
+    if (!merged.some((m) => m.value === custom.value)) {
+      merged.push(custom);
+    }
+  }
+  return merged;
 }
 
 // Prompt for model with search (like OpenCode)
@@ -593,42 +612,12 @@ async function promptForModel(
     );
   }
 
-  // Search/filter prompt first
-  const searchTerm = await p.text({
-    message: `Search ${role} model (leave empty to see all):`,
-    placeholder: `e.g., claude, gpt, mini`,
-  });
-
-  if (p.isCancel(searchTerm) || !searchTerm?.trim()) {
-    // Show all models
-    const options = allModels.map((m) => ({
-      value: m.value,
-      label: `${m.hint ? `${m.hint}: ` : ""}${m.label}`,
-      hint: m.hint,
-    }));
-    return await promptSelectModel(`${role} model`, options);
-  }
-
-  // Filter models by search term
-  const term = searchTerm.toLowerCase().trim();
-  const filtered = allModels.filter(
-    (m) =>
-      m.label.toLowerCase().includes(term) ||
-      m.value.toLowerCase().includes(term) ||
-      m.hint?.toLowerCase().includes(term),
-  );
-
-  if (filtered.length === 0) {
-    throw new Error(`No models found matching "${searchTerm}"`);
-  }
-
-  const options = filtered.map((m) => ({
+  const options = allModels.map((m) => ({
     value: m.value,
     label: `${m.hint ? `${m.hint}: ` : ""}${m.label}`,
     hint: m.hint,
   }));
-
-  return await promptSelectModel(`${role} model (filtered)`, options);
+  return await promptSelectModel(`${role} model`, options);
 }
 
 async function promptSelectModel(
