@@ -45,7 +45,7 @@
     "ai-sdk-ollama": "^3.3.0",
     "chokidar": "^5.0.0",
     "debug": "^4.4.3",
-    "drizzle-orm": "^0.41.0",
+    "drizzle-orm": "^0.45.2",
     "effect": "^3.19.12",
     "minimatch": "^10.1.1",
     "nanoid": "^5.1.6",
